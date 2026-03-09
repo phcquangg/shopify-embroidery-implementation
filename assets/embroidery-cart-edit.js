@@ -25,11 +25,14 @@ if (!customElements.get('embroidery-cart-edit')) {
       this.cancelBtn   = this.querySelector('.embroidery-edit-panel__cancel');
       this.removeBtn   = this.querySelector('.embroidery-edit-panel__remove');
 
+      this._ac = new AbortController();
+      const { signal } = this._ac;
+
       // Row click → open panel (checkbox click is handled separately below)
-      this.row?.addEventListener('click', () => this.openPanel());
+      this.row?.addEventListener('click', () => this.openPanel(), { signal });
       this.row?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.openPanel(); }
-      });
+      }, { signal });
 
       // Checkbox click: stops row click from firing, then either removes or opens panel
       this.checkboxBtn?.addEventListener('click', (e) => {
@@ -40,17 +43,19 @@ if (!customElements.get('embroidery-cart-edit')) {
         } else {
           this.openPanel();
         }
-      });
+      }, { signal });
 
-      this.saveBtn?.addEventListener('click', () => this.saveEmbroidery());
-      this.cancelBtn?.addEventListener('click', () => this.closePanel());
+      this.saveBtn?.addEventListener('click', () => this.saveEmbroidery(), { signal });
+      this.cancelBtn?.addEventListener('click', () => this.closePanel(), { signal });
       this.removeBtn?.addEventListener('click', () => {
         this.optimisticUncheck();
         this.removeEmbroidery();
-      });
+      }, { signal });
 
-      // Re-open drawer after a page reload triggered by this component
-      EmbroideryCartEdit.maybeReopenDrawer();
+    }
+
+    disconnectedCallback() {
+      this._ac?.abort();
     }
 
     openPanel() {
@@ -122,7 +127,7 @@ if (!customElements.get('embroidery-cart-edit')) {
           body.sections_url = window.location.pathname;
         }
 
-        const resp = await fetch(window.routes.cart_change_url, {
+        const resp = await fetch(window.routes.cart_change_url + '.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
           body: JSON.stringify(body),
@@ -130,17 +135,11 @@ if (!customElements.get('embroidery-cart-edit')) {
         if (!resp.ok) throw new Error('cart_change failed');
 
         const data = await resp.json();
-
         if (cartDrawer?.renderContents) {
           cartDrawer.renderContents(data);
-        } else {
-          sessionStorage.setItem('reopen-cart-drawer', '1');
-          window.location.reload();
         }
       } catch (err) {
         console.error('[EmbroideryCartEdit]', err);
-        sessionStorage.setItem('reopen-cart-drawer', '1');
-        window.location.reload();
       } finally {
         this.setLoading(false);
       }
@@ -155,7 +154,7 @@ if (!customElements.get('embroidery-cart-edit')) {
 
       try {
         // Step 1: Remove the current line item
-        const removeResp = await fetch(window.routes.cart_change_url, {
+        const removeResp = await fetch(window.routes.cart_change_url + '.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
           body: JSON.stringify({ line, quantity: 0 }),
@@ -172,7 +171,7 @@ if (!customElements.get('embroidery-cart-edit')) {
           addBody.sections_url = window.location.pathname;
         }
 
-        const addResp = await fetch(window.routes.cart_add_url, {
+        const addResp = await fetch(window.routes.cart_add_url + '.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
           body: JSON.stringify(addBody),
@@ -184,14 +183,9 @@ if (!customElements.get('embroidery-cart-edit')) {
         // Step 3: Refresh cart UI
         if (cartDrawer?.renderContents) {
           cartDrawer.renderContents(data);
-        } else {
-          sessionStorage.setItem('reopen-cart-drawer', '1');
-          window.location.reload();
         }
       } catch (err) {
         console.error('[EmbroideryCartEdit]', err);
-        sessionStorage.setItem('reopen-cart-drawer', '1');
-        window.location.reload();
       } finally {
         this.setLoading(false);
       }
@@ -207,14 +201,6 @@ if (!customElements.get('embroidery-cart-edit')) {
       if (this.checkboxBtn) this.checkboxBtn.disabled = loading;
     }
 
-    /** After a reload triggered by this component, re-open the cart drawer. */
-    static maybeReopenDrawer() {
-      if (!sessionStorage.getItem('reopen-cart-drawer')) return;
-      sessionStorage.removeItem('reopen-cart-drawer');
-      requestAnimationFrame(() => {
-        document.querySelector('cart-drawer')?.open();
-      });
-    }
   }
 
   customElements.define('embroidery-cart-edit', EmbroideryCartEdit);
