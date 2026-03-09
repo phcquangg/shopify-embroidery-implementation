@@ -8,10 +8,25 @@
  * - Provide JS fallback for the CSS :has() expand/collapse for older browsers
  * - Reset the form after a successful add-to-cart (via PUB_SUB_EVENTS.cartUpdate)
  * - Announce price changes to assistive technology via aria-live region
+ *
+ * @element embroidery-form
+ * @extends HTMLElement
  */
 
 if (!customElements.get('embroidery-form')) {
   class EmbroideryForm extends HTMLElement {
+    /** @type {string} */ sectionId;
+    /** @type {HTMLInputElement | null} */ toggle;
+    /** @type {HTMLElement | null} */ panel;
+    /** @type {HTMLElement | null} */ priceLabel;
+    /** @type {HTMLInputElement | null} */ priceInput;
+    /** @type {HTMLInputElement | null} */ nameInput;
+    /** @type {NodeListOf<HTMLInputElement>} */ colourRadios;
+    /** @type {NodeListOf<HTMLInputElement>} */ fontRadios;
+    /** @type {NodeListOf<HTMLInputElement | HTMLTextAreaElement>} */ allPropertyInputs;
+    /** @type {HTMLButtonElement | null} */ submitButton;
+    /** @type {(() => void) | undefined} */ unsubscribeCartUpdate;
+
     constructor() {
       super();
       this.sectionId = this.dataset.sectionId;
@@ -58,12 +73,20 @@ if (!customElements.get('embroidery-form')) {
       this.unsubscribeCartUpdate?.();
     }
 
+    /**
+     * Disables the add-to-cart button when embroidery is toggled on but no name is entered.
+     */
     updateSubmitButton() {
       if (!this.submitButton) return;
       const blocked = this.toggle?.checked && !this.nameInput?.value.trim();
       this.submitButton.disabled = blocked;
     }
 
+    /**
+     * Handles the embroidery toggle checkbox change event.
+     * Shows/hides the panel, updates ARIA attributes, toggles input states,
+     * and applies the CSS :has() fallback if needed.
+     */
     onToggleChange() {
       const checked = this.toggle.checked;
       this.toggle.setAttribute('aria-expanded', checked.toString());
@@ -89,36 +112,56 @@ if (!customElements.get('embroidery-form')) {
       }
     }
 
+    /**
+     * Handles a colour radio change event and updates the displayed price.
+     * @param {Event} event - The change event from a colour radio input.
+     */
     onColourChange(event) {
       const radio = event.target;
       const pricePence = parseInt(radio.dataset.price ?? '0', 10);
       this.updatePrice(pricePence);
     }
 
+    /**
+     * Updates the hidden price input and the visible price label.
+     * @param {number} pricePence - Price in pence (e.g. 500 = £5.00).
+     */
     updatePrice(pricePence) {
       if (this.priceInput) {
         this.priceInput.value = pricePence;
       }
       if (this.priceLabel) {
-        // Format price using Shopify's money format exposed via window.Shopify
         const formatted = this.formatMoney(pricePence);
         this.priceLabel.textContent = `+${formatted}`;
       }
     }
 
+    /**
+     * Formats a price in pence to a localised money string using Shopify's moneyFormat.
+     * Supports both {{amount}} and {{amount_no_decimals}} format tokens.
+     * @param {number} pricePence - Price in pence (e.g. 500 = £5.00).
+     * @returns {string} Formatted price string (e.g. "£5.00").
+     */
     formatMoney(pricePence) {
       const moneyFormat = window.Shopify?.moneyFormat ?? '£{{amount}}';
       const amount = (pricePence / 100).toFixed(2);
-      // Remove trailing .00 if the format doesn't use decimals in this locale
       return moneyFormat.replace('{{amount}}', amount).replace('{{amount_no_decimals}}', Math.floor(pricePence / 100));
     }
 
+    /**
+     * Enables or disables all embroidery property inputs.
+     * @param {boolean} disabled - Whether to disable the inputs.
+     */
     setInputsDisabled(disabled) {
       this.allPropertyInputs.forEach((input) => {
         input.disabled = disabled;
       });
     }
 
+    /**
+     * Applies manual panel expand/collapse styles for browsers without CSS :has() support.
+     * @param {boolean} checked - Whether the embroidery toggle is currently checked.
+     */
     applyHasFallback(checked) {
       const box = this.querySelector('.embroidery-form__box');
       const checkmark = this.querySelector('.embroidery-form__checkmark');
@@ -134,6 +177,10 @@ if (!customElements.get('embroidery-form')) {
       }
     }
 
+    /**
+     * Resets the embroidery form to its unchecked default state.
+     * Called after a successful add-to-cart via the cartUpdate pub/sub event.
+     */
     resetForm() {
       if (!this.toggle) return;
       this.toggle.checked = false;

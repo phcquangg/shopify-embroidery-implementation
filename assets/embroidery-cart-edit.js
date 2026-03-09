@@ -13,10 +13,22 @@
  *   - Click checkbox when unchecked: open edit panel
  *   - Save flow: remove item (qty=0) → re-add with new properties → renderContents()
  *   - Remove flow: cart/change.js with explicit empty properties → renderContents()
+ *
+ * @element embroidery-cart-edit
+ * @extends HTMLElement
  */
 
 if (!customElements.get('embroidery-cart-edit')) {
   class EmbroideryCartEdit extends HTMLElement {
+    /** @type {HTMLElement | null} */ row;
+    /** @type {HTMLElement | null} */ checkboxBtn;
+    /** @type {HTMLElement | null} */ panel;
+    /** @type {HTMLButtonElement | null} */ saveBtn;
+    /** @type {HTMLButtonElement | null} */ cancelBtn;
+    /** @type {HTMLButtonElement | null} */ removeBtn;
+    /** @type {HTMLElement | null} */ priceLabel;
+    /** @type {AbortController} */ _ac;
+
     connectedCallback() {
       this.row         = this.querySelector('.embroidery-cart-row');
       this.checkboxBtn = this.querySelector('.embroidery-checkbox-btn');
@@ -51,13 +63,13 @@ if (!customElements.get('embroidery-cart-edit')) {
         this.optimisticUncheck();
         this.removeEmbroidery();
       }, { signal });
-
     }
 
     disconnectedCallback() {
       this._ac?.abort();
     }
 
+    /** Opens the embroidery edit panel and focuses the name input. */
     openPanel() {
       this.panel?.removeAttribute('hidden');
       setTimeout(() => {
@@ -65,16 +77,21 @@ if (!customElements.get('embroidery-cart-edit')) {
       }, 50);
     }
 
+    /** Hides the embroidery edit panel. */
     closePanel() {
       this.panel?.setAttribute('hidden', '');
     }
 
-    /** Instantly uncheck the row before the API responds */
+    /** Instantly uncheck the row before the API responds. */
     optimisticUncheck() {
       this.row?.classList.remove('is-checked', 'bg-neutral-100');
       this.querySelector('.embroidery-cart-summary')?.remove();
     }
 
+    /**
+     * Reads the current panel inputs and returns them as Shopify line item properties.
+     * @returns {{ [key: string]: string }} Line item properties object.
+     */
     collectProperties() {
       const nameInput  = this.panel?.querySelector('.embroidery-edit-panel__name');
       const colourRadio = this.panel?.querySelector('input[name^="embroidery-edit-colour"]:checked');
@@ -94,6 +111,11 @@ if (!customElements.get('embroidery-cart-edit')) {
       return properties;
     }
 
+    /**
+     * Validates the panel inputs and triggers a cart update with embroidery properties.
+     * Focuses the name input if it is empty.
+     * @returns {Promise<void>}
+     */
     async saveEmbroidery() {
       const properties = this.collectProperties();
 
@@ -105,6 +127,11 @@ if (!customElements.get('embroidery-cart-edit')) {
       await this.updateCart(properties);
     }
 
+    /**
+     * Clears embroidery properties from the cart line item via cart/change.js,
+     * then refreshes the cart drawer.
+     * @returns {Promise<void>}
+     */
     async removeEmbroidery() {
       const line = parseInt(this.dataset.line, 10);
       this.setLoading(true);
@@ -145,6 +172,13 @@ if (!customElements.get('embroidery-cart-edit')) {
       }
     }
 
+    /**
+     * Replaces the current cart line item with the same variant re-added with
+     * the given embroidery properties. Uses a remove + add strategy because
+     * Shopify does not support in-place property updates.
+     * @param {{ [key: string]: string }} properties - Embroidery line item properties.
+     * @returns {Promise<void>}
+     */
     async updateCart(properties) {
       const line      = parseInt(this.dataset.line, 10);
       const variantId = parseInt(this.dataset.variantId, 10);
@@ -191,6 +225,10 @@ if (!customElements.get('embroidery-cart-edit')) {
       }
     }
 
+    /**
+     * Enables or disables the save, remove, and checkbox buttons.
+     * @param {boolean} loading - Whether a request is in flight.
+     */
     setLoading(loading) {
       if (this.saveBtn) {
         this.saveBtn.disabled = loading;
@@ -200,7 +238,6 @@ if (!customElements.get('embroidery-cart-edit')) {
       if (this.removeBtn)   this.removeBtn.disabled = loading;
       if (this.checkboxBtn) this.checkboxBtn.disabled = loading;
     }
-
   }
 
   customElements.define('embroidery-cart-edit', EmbroideryCartEdit);
