@@ -1,0 +1,237 @@
+{% comment %}
+  Renders the embroidery customisation form on the product page.
+
+  Accepts:
+  - product: {Object} Product Liquid object
+  - section_id: {String} Section ID for unique element IDs
+  - block: {Object} The embroidery block (for fallback label/disclaimer settings)
+
+  Usage:
+  {% render 'embroidery-form', product: product, section_id: section.id, block: block %}
+{% endcomment %}
+
+{%- liquid
+  assign embroidery_meta = product.metafields.embroidery
+  assign char_limit = embroidery_meta.char_limit | default: 20
+  assign colours = embroidery_meta.colours.value
+  assign fonts = embroidery_meta.fonts.value
+  assign mockup_image = embroidery_meta.mockup_image.value
+  assign label = embroidery_meta.label | default: block.settings.default_label | default: 'Add Embroidered Name'
+  assign disclaimer = embroidery_meta.disclaimer | default: block.settings.default_disclaimer | default: 'Unfortunately we can not accept returns or exchanges on embroidered items.'
+
+  assign first_colour = colours | first
+  assign min_price_pence = first_colour.price_pence | default: 0
+  for colour in colours
+    if colour.price_pence < min_price_pence
+      assign min_price_pence = colour.price_pence
+    endif
+  endfor
+  assign min_price = min_price_pence | divided_by: 100.0 | times: 100 | money
+-%}
+
+<embroidery-form
+  id="EmbroideryForm-{{ section_id }}"
+  class="embroidery-form block p-6 bg-neutral-100 mt-16 mb-16"
+  data-section-id="{{ section_id }}"
+>
+  {%- comment %} Toggle checkbox — CSS :has() drives expand, JS handles price + fallback {%- endcomment %}
+  <input
+    type="checkbox"
+    id="embroidery-toggle-{{ section_id }}"
+    class="embroidery-form__checkbox sr-only"
+    name="embroidery-toggle"
+    aria-expanded="false"
+    aria-controls="embroidery-panel-{{ section_id }}"
+  >
+  <label
+    for="embroidery-toggle-{{ section_id }}"
+    class="embroidery-form__label flex items-center justify-between w-full cursor-pointer select-none"
+  >
+    <span class="flex items-center gap-3">
+      <span class="flex items-center justify-center">
+        <span class="embroidery-form__icon-unchecked flex">{% render 'icons', type: 'checkbox' %}</span>
+        <span class="embroidery-form__icon-checked flex">{% render 'icons', type: 'checked-checkbox' %}</span>
+      </span>
+
+      <span class="font-medium" style="font-size: 1.6rem;">{{ label }}</span>
+    </span>
+    <span
+      class="embroidery-form__price"
+      aria-live="polite"
+      aria-atomic="true"
+      >+{{ min_price -}}
+    </span>
+  </label>
+
+  {%- comment %} Collapsible panel {%- endcomment %}
+  <div
+    id="embroidery-panel-{{ section_id }}"
+    class="embroidery-form__panel overflow-hidden max-h-0 transition-[max-height] duration-300 ease-in-out"
+    aria-hidden="true"
+    hidden
+  >
+    <div class="pt-8 [display:grid] grid-cols-1 md:grid-cols-2 md:gap-x-12 gap-y-8">
+      {%- comment %} LEFT COLUMN: form fields {%- endcomment %}
+      <div class="flex flex-col gap-10">
+        {%- comment %} Name text input {%- endcomment %}
+        <div>
+          <label
+            for="embroidery-name-{{ section_id }}"
+            class="block font-normal mb-3 text-2xl"
+          >
+            {{- 'embroidery.char_limit_label' | t: limit: char_limit -}}
+          </label>
+          <input
+            type="text"
+            id="embroidery-name-{{ section_id }}"
+            name="properties[Embroidered Name]"
+            class="embroidery-form__name-input w-full rounded-xl border border-[rgba(var(--color-foreground),0.3)] px-6 py-5 placeholder:text-[rgba(var(--color-foreground),0.4)] bg-transparent transition shadow-none outline-none"
+            placeholder="{{ 'embroidery.name_placeholder' | t }}"
+            maxlength="{{ char_limit }}"
+            autocomplete="off"
+            disabled
+          >
+        </div>
+
+        {%- comment %} Colour swatches {%- endcomment %}
+        {%- if colours != blank -%}
+          <fieldset class="border-none p-0 m-0">
+            <legend class="font-normal mb-3.5 text-2xl">{{ 'embroidery.colour_label' | t }}</legend>
+            <div class="flex items-end gap-6 flex-wrap">
+              {%- for colour in colours -%}
+                <label
+                  class="embroidery-swatch flex flex-col items-center gap-1.5 cursor-pointer"
+                  title="{{ colour.name }}"
+                >
+                  <input
+                    type="radio"
+                    name="properties[Embroidery Colour]"
+                    value="{{ colour.name }}"
+                    class="sr-only"
+                    data-price="{{ colour.price_pence }}"
+                    {% if forloop.first %}
+                      checked
+                    {% endif %}
+                    disabled
+                  >
+                  <span
+                    class="embroidery-swatch__circle w-14 h-14 rounded-full  transition-all"
+                    style="background-color: {{ colour.hex }};"
+                    aria-hidden="true"
+                  ></span>
+                  <span style="font-size: 1.2rem;">{{ colour.name }}</span>
+                </label>
+              {%- endfor -%}
+            </div>
+          </fieldset>
+        {%- endif -%}
+
+        {%- comment %} Font toggles {%- endcomment %}
+        {%- if fonts != blank -%}
+          <fieldset class="border-none p-0 m-0">
+            <legend class="font-normal mb-3.5 text-2xl">{{ 'embroidery.font_label' | t }}</legend>
+            <div class="[display:grid] grid-cols-2 gap-4">
+              {%- for font in fonts -%}
+                <label class="embroidery-font cursor-pointer w-full">
+                  <input
+                    type="radio"
+                    name="properties[Embroidery Font]"
+                    value="{{ font }}"
+                    class="sr-only"
+                    {% if forloop.first %}
+                      checked
+                    {% endif %}
+                    disabled
+                  >
+                  <span
+                    class="embroidery-font__btn flex items-center justify-center py-4 border border-b3 rounded-md transition-colors text-3xl"
+                    style="font-family: {{ font }}, serif"
+                  >
+                    {{- font -}}
+                  </span>
+                </label>
+              {%- endfor -%}
+            </div>
+          </fieldset>
+        {%- endif -%}
+
+        {%- comment %} Disclaimer {%- endcomment %}
+      </div>
+      <p class="text-1e leading-snug col-span-full" style="font-size: 1.4rem;">
+        {{ disclaimer }}
+      </p>
+      {%- comment %} /LEFT COLUMN {%- endcomment %}
+
+      {%- comment %} RIGHT COLUMN: mockup image {%- endcomment %}
+      {%- if mockup_image != blank -%}
+        <div class="embroidery-form__mockup flex items-start justify-center md:justify-end row-start-1 col-start-2">
+          <div class="w-full max-w-[260px] aspect-square rounded-xl overflow-hidden bg-[rgba(var(--color-foreground),0.05)] flex items-center justify-center">
+            <img
+              id="embroidery-mockup-{{ section_id }}"
+              src="{{ mockup_image | image_url: width: 520 }}"
+              alt="{{ 'embroidery.mockup_alt' | t | default: 'Embroidery preview' }}"
+              width="260"
+              height="260"
+              loading="lazy"
+              class="w-full h-full object-contain"
+            >
+          </div>
+        </div>
+      {%- endif -%}
+    </div>
+    {%- comment %} /grid {%- endcomment %}
+  </div>
+  {%- comment %} /panel {%- endcomment %}
+
+  {%- comment %} Hidden inputs — submitted with the form {%- endcomment %}
+  <input
+    type="hidden"
+    id="embroidery-price-input-{{ section_id }}"
+    name="properties[_embroidery_price_pence]"
+    value="{{ first_colour.price_pence | default: 0 }}"
+    disabled
+  >
+</embroidery-form>
+
+<style>
+  /* Checkbox icon toggle */
+  .embroidery-form__icon-checked {
+    display: none;
+  }
+  .embroidery-form:has(#embroidery-toggle-{{ section_id }}:checked) .embroidery-form__icon-unchecked {
+    display: none;
+  }
+  .embroidery-form:has(#embroidery-toggle-{{ section_id }}:checked) .embroidery-form__icon-checked {
+    display: flex;
+  }
+
+  /* Checked state — expand panel */
+  .embroidery-form:has(#embroidery-toggle-{{ section_id }}:checked) #embroidery-panel-{{ section_id }} {
+    max-height: 900px;
+  }
+
+  /* Checked state — fill checkbox box */
+  .embroidery-form:has(#embroidery-toggle-{{ section_id }}:checked) .embroidery-form__box {
+    background-color: rgb(var(--color-foreground));
+    border-color: rgb(var(--color-foreground));
+    color: rgb(var(--color-background));
+  }
+
+  /* Checked state — show checkmark */
+  .embroidery-form:has(#embroidery-toggle-{{ section_id }}:checked) .embroidery-form__checkmark {
+    display: block;
+  }
+
+  /* Selected colour swatch ring */
+  .embroidery-swatch input:checked + .embroidery-swatch__circle {
+    border: 1px solid oklch(88.53% 0.000 0);
+    border-offset: 2px;
+  }
+
+  /* Selected font button */
+  .embroidery-font input:checked + .embroidery-font__btn {
+    background-color: rgb(var(--color-foreground));
+    color: rgb(var(--color-background));
+    border-color: rgb(var(--color-foreground));
+  }
+</style>

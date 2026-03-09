@@ -1,0 +1,201 @@
+{% comment %}
+  Renders the embroidery checkbox-row UI inside a cart item.
+
+  Accepts:
+  - item: {Object} Cart line item Liquid object
+
+  Usage:
+  {% render 'embroidery-cart-edit', item: item %}
+{% endcomment %}
+
+{%- liquid
+  assign embroidery_name   = item.properties['Embroidered Name']
+  assign embroidery_colour = item.properties['Embroidery Colour']
+  assign embroidery_font   = item.properties['Embroidery Font']
+  assign has_embroidery    = false
+  if embroidery_name != blank
+    assign has_embroidery = true
+  endif
+
+  assign embroidery_meta = item.product.metafields.embroidery
+  assign colours         = embroidery_meta.colours.value
+  assign fonts           = embroidery_meta.fonts.value
+  assign char_limit      = embroidery_meta.char_limit | default: 20
+  assign label           = embroidery_meta.label | default: 'Add Embroidered Name'
+
+  assign first_colour    = colours | first
+  assign min_price_pence = first_colour.price_pence | default: 0
+  for colour in colours
+    if colour.price_pence < min_price_pence
+      assign min_price_pence = colour.price_pence
+    endif
+  endfor
+  assign min_price = min_price_pence | divided_by: 100.0 | times: 100 | money
+-%}
+
+<embroidery-cart-edit
+  class="embroidery-cart-edit block"
+  data-line="{{ item.index | plus: 1 }}"
+  data-variant-id="{{ item.variant_id }}"
+  data-quantity="{{ item.quantity }}"
+  data-has-embroidery="{{ has_embroidery }}"
+>
+  {%- comment %} Row: click opens edit panel; checkbox btn handles remove when checked {% endcomment -%}
+  <div
+    class="embroidery-cart-row rounded-xl p-6 cursor-pointer{% if has_embroidery %} is-checked bg-neutral-100{% endif %}"
+    role="button"
+    tabindex="0"
+    aria-label="{{ label }}"
+  >
+    <div class="flex items-center gap-3">
+      <button
+        type="button"
+        class="embroidery-checkbox-btn shrink-0 flex items-center justify-center border-none p-0 bg-transparent cursor-pointer"
+        aria-label="{% if has_embroidery %}Remove embroidery{% else %}Add embroidery{% endif %}"
+      >
+        <span class="embroidery-cart-toggle__icon-unchecked flex">{% render 'icons', type: 'checkbox' %}</span>
+        <span class="embroidery-cart-toggle__icon-checked flex">{% render 'icons', type: 'checked-checkbox' %}</span>
+      </button>
+      <span class="font-medium flex-1 text-2xl">{{ label }} (+{{ min_price }})</span>
+    </div>
+
+    {%- if has_embroidery -%}
+      <p class="embroidery-cart-summary text-[rgba(var(--color-foreground),0.6)] text-xl m-0 mt-2">
+        Embroidered Name: &ldquo;{{ embroidery_name }}&rdquo;
+        {%- if embroidery_colour != blank %}, {{ embroidery_colour }}{%- endif -%}
+        {%- if embroidery_font != blank %}, {{ embroidery_font }}{%- endif %}
+      </p>
+    {%- endif -%}
+  </div>
+
+  {%- comment %} Inline form — shown when toggle is activated {% endcomment -%}
+  <div
+    id="embroidery-edit-panel-{{ item.index }}"
+    class="embroidery-edit-panel mt-3 p-5 border border-[rgba(var(--color-foreground),0.12)] rounded-xl"
+    hidden
+  >
+    <div class="flex flex-col gap-5">
+      <div>
+        <label
+          for="embroidery-edit-name-{{ item.index }}"
+          class="block mb-2"
+          style="font-size: 1.2rem;"
+        >
+          {{ 'embroidery.char_limit_label' | t: limit: char_limit }}
+        </label>
+        <input
+          type="text"
+          id="embroidery-edit-name-{{ item.index }}"
+          class="embroidery-edit-panel__name w-full rounded-lg border border-[rgba(var(--color-foreground),0.25)] px-4 py-3 bg-transparent focus:outline-none transition shadow-none outline-none"
+          style="font-size: 1.4rem;"
+          placeholder="{{ 'embroidery.name_placeholder' | t }}"
+          maxlength="{{ char_limit }}"
+          value="{{ embroidery_name | escape }}"
+        >
+      </div>
+
+      {%- comment %} Colour swatches {% endcomment -%}
+      {%- if colours != blank -%}
+        <fieldset class="border-none p-0 m-0">
+          <legend class="mb-2.5" style="font-size: 1.2rem;">{{ 'embroidery.colour_label' | t }}</legend>
+          <div class="flex items-end gap-4 flex-wrap">
+            {%- for colour in colours -%}
+              <label class="embroidery-edit-swatch flex flex-col items-center gap-1.5 cursor-pointer" title="{{ colour.name }}">
+                <input
+                  type="radio"
+                  name="embroidery-edit-colour-{{ item.index }}"
+                  value="{{ colour.name }}"
+                  class="sr-only"
+                  data-price="{{ colour.price_pence }}"
+                  {% if colour.name == embroidery_colour %}checked
+                  {% elsif forloop.first and embroidery_colour == blank %}checked
+                  {% endif %}
+                >
+                <span
+                  class="embroidery-edit-swatch__circle w-10 h-10 rounded-full transition-all border border-neutral-100"
+                  style="background-color: {{ colour.hex }};"
+                  aria-hidden="true"
+                ></span>
+                <span style="font-size: 1.2rem;">{{ colour.name }}</span>
+              </label>
+            {%- endfor -%}
+          </div>
+        </fieldset>
+      {%- endif -%}
+
+      {%- comment %} Font toggles {% endcomment -%}
+      {%- if fonts != blank -%}
+        <fieldset class="border-none p-0 m-0">
+          <legend class="mb-2.5" style="font-size: 1.2rem;">{{ 'embroidery.font_label' | t }}</legend>
+          <div class="flex gap-3 flex-wrap">
+            {%- for font in fonts -%}
+              <label class="embroidery-edit-font cursor-pointer">
+                <input
+                  type="radio"
+                  name="embroidery-edit-font-{{ item.index }}"
+                  value="{{ font }}"
+                  class="sr-only"
+                  {% if font == embroidery_font %}checked
+                  {% elsif forloop.first and embroidery_font == blank %}checked
+                  {% endif %}
+                >
+                <span
+                  class="embroidery-edit-font__btn block px-5 py-2.5 border border-[rgba(var(--color-foreground),0.25)] rounded-md transition-colors"
+                  style="font-family: {{ font }}, serif; font-size: 1.3rem;"
+                >{{ font }}</span>
+              </label>
+            {%- endfor -%}
+          </div>
+        </fieldset>
+      {%- endif -%}
+
+      {%- comment %} Action buttons {% endcomment -%}
+      <div class="flex items-center gap-4 pt-1">
+        <button
+          type="button"
+          class="embroidery-edit-panel__save button button--primary"
+          style="font-size: 1.4rem; padding: 1rem 2.4rem; position: relative;"
+        >
+          {% render 'loading-spinner' %}
+          {{ 'embroidery.save' | t }}
+        </button>
+        <button
+          type="button"
+          class="embroidery-edit-panel__cancel button button--secondary"
+          style="font-size: 1.4rem;"
+        >
+          {{ 'embroidery.cancel' | t }}
+        </button>
+        {%- if has_embroidery -%}
+          <button
+            type="button"
+            class="embroidery-edit-panel__remove underline button button--secondary ml-auto"
+            style="font-size: 1.4rem;"
+          >
+            {{ 'embroidery.remove' | t }}
+          </button>
+        {%- endif -%}
+      </div>
+
+    </div>
+  </div>
+</embroidery-cart-edit>
+
+<style>
+  /* Icon toggle based on .is-checked on the row */
+  .embroidery-cart-toggle__icon-checked { display: none; }
+  .embroidery-cart-row.is-checked .embroidery-cart-toggle__icon-unchecked { display: none; }
+  .embroidery-cart-row.is-checked .embroidery-cart-toggle__icon-checked { display: flex; }
+
+  /* Selected colour swatch */
+  .embroidery-edit-swatch input:checked + .embroidery-edit-swatch__circle {
+    border: 1px solid rgb(var(--color-foreground));
+  }
+
+  /* Selected font button */
+  .embroidery-edit-font input:checked + .embroidery-edit-font__btn {
+    background-color: rgb(var(--color-foreground));
+    color: rgb(var(--color-background));
+    border-color: rgb(var(--color-foreground));
+  }
+</style>

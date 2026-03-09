@@ -1,0 +1,6 @@
+[environments.development]
+theme = "160195674324"
+store = "dev-store-212.myshopify.com"
+password  = "shptka_240d75addd4b3dbea33802c960e18b8c"
+store-password = "ooshau"
+ignore = ["sections/header.liquid"]
